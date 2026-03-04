@@ -1,0 +1,37 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
+@theme {
+  --color-primary: #1152d4;
+  --color-background-light: #f6f6f8;
+  --color-background-dark: #101622;
+  --color-shift-t1: #f97316;
+  --color-shift-t2: #3b82f6;
+  --color-shift-t3: #ef4444;
+  --color-shift-t4: #a855f7;
+  --color-shift-fg: #22c55e;
+  --color-shift-fe: #000000;
+  --color-shift-fr: #4b5563;
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
