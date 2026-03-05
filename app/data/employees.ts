@@ -3,9 +3,13 @@ export interface Employee {
     id: string;
     matricula: string;
     name: string;
+    role?: string;
     shift: ShiftType;
-    status: 'ativo' | 'ferias';
+    status: 'ativo' | 'ferias' | 'inativo';
     sex: 'M' | 'F';
+    admissionDate?: string;
+    phone?: string;
+    email?: string;
 }
 
 export interface ScaleEdit {

@@ -3,9 +3,13 @@ CREATE TABLE public.employees (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     matricula TEXT UNIQUE,
     name TEXT NOT NULL,
+    role TEXT,
     shift TEXT NOT NULL CHECK (shift IN ('T1', 'T2', 'T3', 'T4')),
-    status TEXT NOT NULL CHECK (status IN ('ativo', 'ferias', 'inativo')),
+    status TEXT NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo', 'ferias', 'inativo')),
     sex TEXT NOT NULL CHECK (sex IN ('M', 'F')),
+    admission_date DATE,
+    phone TEXT,
+    email TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

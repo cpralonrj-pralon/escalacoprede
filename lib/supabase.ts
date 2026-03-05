@@ -12,8 +12,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Inicializa o cliente apenas se a URL for válida. 
-// Durante o build (pre-render), se a URL estiver vazia, evitamos o erro fatal.
+// Durante o build ou se as chaves faltarem no Railway, evitamos o erro fatal "reading 'from' of null".
 export const supabase = (supabaseUrl && supabaseAnonKey)
     ? createClient(supabaseUrl, supabaseAnonKey)
-    : (null as any); // O as any é usado para não quebrar os tipos onde é importado.
-
+    : {
+        from: () => ({
+            select: () => ({
+                order: () => Promise.resolve({ data: [], error: { message: 'Chaves do Supabase ausentes' } }),
+                gte: () => ({ lte: () => Promise.resolve({ data: [], error: { message: 'Chaves do Supabase ausentes' } }) }),
+                upsert: () => Promise.resolve({ error: { message: 'Chaves do Supabase ausentes' } }),
+                insert: () => Promise.resolve({ error: { message: 'Chaves do Supabase ausentes' } }),
+                delete: () => ({ eq: () => Promise.resolve({ error: { message: 'Chaves do Supabase ausentes' } }) }),
+            }),
+            delete: () => ({ eq: () => Promise.resolve({ error: { message: 'Chaves do Supabase ausentes' } }) }),
+            upsert: () => Promise.resolve({ error: { message: 'Chaves do Supabase ausentes' } }),
+            insert: () => Promise.resolve({ error: { message: 'Chaves do Supabase ausentes' } }),
+        }),
+        auth: { getSession: () => Promise.resolve({ data: { session: null } }) }
+    } as any;

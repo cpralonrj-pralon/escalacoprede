@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { employees } from '../data/employees';
+import { supabase } from '@/lib/supabase';
+import { Employee } from '../data/employees';
 
 export default function Ferias() {
   const [showModal, setShowModal] = useState(false);
@@ -11,6 +12,23 @@ export default function Ferias() {
   const [periodo, setPeriodo] = useState('2024/2025');
   const [daysCount, setDaysCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dbEmployees, setDbEmployees] = useState<Employee[]>([]);
+  const [isModalLoading, setIsModalLoading] = useState(false);
+
+  // Carregar funcionários do banco
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .order('name');
+
+      if (data) {
+        setDbEmployees(data as Employee[]);
+      }
+    };
+    fetchEmployees();
+  }, []);
 
   // Cálculo automático de dias
   useEffect(() => {
@@ -25,7 +43,7 @@ export default function Ferias() {
     }
   }, [startDate, endDate]);
 
-  const filteredEmployees = employees.filter(e =>
+  const filteredEmployees = dbEmployees.filter(e =>
     e.name.toLowerCase().includes(empSearch.toLowerCase())
   ).slice(0, 5);
 
