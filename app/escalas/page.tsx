@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { Employee, ScaleEdit } from '@/app/data/employees';
+import { Employee, ScaleEdit, ShiftType } from '@/app/data/employees';
 
 // ===== TIPOS =====
 export type CellValue = 'T1' | 'T2' | 'T3' | 'T4' | 'FG' | 'FE' | 'FR' | 'FF' | 'COM' | 'DSR';

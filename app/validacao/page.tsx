@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Employee, ScaleEdit } from '../data/employees';
+import { Employee, ScaleEdit, ShiftType } from '../data/employees';
 import { CellValue } from '../escalas/page';
 
 // Horários de Turno para Cálculo de Interjornada (11h)
