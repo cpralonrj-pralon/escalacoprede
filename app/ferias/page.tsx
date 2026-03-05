@@ -14,6 +14,47 @@ export default function Ferias() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dbEmployees, setDbEmployees] = useState<Employee[]>([]);
   const [isModalLoading, setIsModalLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSaveVacation = async () => {
+    if (!selectedEmpId || !startDate || !endDate) return;
+
+    setIsSaving(true);
+    try {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const datesToUpdate = [];
+
+      let current = new Date(start);
+      while (current <= end) {
+        datesToUpdate.push({
+          employee_id: selectedEmpId,
+          date: current.toISOString().split('T')[0],
+          shift_value: 'FE'
+        });
+        current.setDate(current.getDate() + 1);
+      }
+
+      const { error } = await supabase
+        .from('scale_edits')
+        .upsert(datesToUpdate, { onConflict: 'employee_id, date' });
+
+      if (error) throw error;
+
+      alert('Programação de férias salva com sucesso!');
+      setShowModal(false);
+      // Limpar campos
+      setSelectedEmpId('');
+      setEmpSearch('');
+      setStartDate('');
+      setEndDate('');
+    } catch (error: any) {
+      console.error('Erro ao salvar férias:', error);
+      alert('Erro ao salvar programação: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Carregar funcionários do banco
   useEffect(() => {
@@ -347,14 +388,14 @@ export default function Ferias() {
                   Cancelar
                 </button>
                 <button
-                  disabled={!selectedEmpId || daysCount === 0}
-                  onClick={() => {
-                    alert('Programação salva com sucesso!');
-                    setShowModal(false);
-                  }}
-                  className="flex-1 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={!selectedEmpId || daysCount === 0 || isSaving}
+                  onClick={handleSaveVacation}
+                  className="flex-1 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  Salvar Programação
+                  {isSaving && (
+                    <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
+                  )}
+                  {isSaving ? 'Salvando...' : 'Salvar Programação'}
                 </button>
               </div>
             </div>
