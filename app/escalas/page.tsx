@@ -369,12 +369,54 @@ export default function Escalas() {
 
   // Group filtered employees by shift for display
   const shiftGroups: { label: string; shift: ShiftType; emps: Employee[] }[] = [
-    { label: 'T1 (06:00-15:48)', shift: 'T1', emps: filteredEmployees.filter(e => e.shift === 'T1' && e.status === 'ativo') },
-    { label: 'T2 (13:00-22:48)', shift: 'T2', emps: filteredEmployees.filter(e => e.shift === 'T2' && e.status === 'ativo') },
-    { label: 'T3 (14:00-23:48)', shift: 'T3', emps: filteredEmployees.filter(e => e.shift === 'T3' && e.status === 'ativo') },
-    { label: 'T4 (22:00-06:35)', shift: 'T4', emps: filteredEmployees.filter(e => e.shift === 'T4' && e.status === 'ativo') },
+    {
+      label: 'T1 (06:00-15:48)',
+      shift: 'T1',
+      emps: filteredEmployees.filter(e => {
+        const isVacationThisMonth = Object.keys(manualEdits).some(key =>
+          key.startsWith(`${e.id}-${ano}-${monthsMap[mes]}-`) && manualEdits[key] === 'FE'
+        );
+        return e.shift === 'T1' && e.status === 'ativo' && !isVacationThisMonth;
+      })
+    },
+    {
+      label: 'T2 (13:00-22:48)',
+      shift: 'T2',
+      emps: filteredEmployees.filter(e => {
+        const isVacationThisMonth = Object.keys(manualEdits).some(key =>
+          key.startsWith(`${e.id}-${ano}-${monthsMap[mes]}-`) && manualEdits[key] === 'FE'
+        );
+        return e.shift === 'T2' && e.status === 'ativo' && !isVacationThisMonth;
+      })
+    },
+    {
+      label: 'T3 (14:00-23:48)',
+      shift: 'T3',
+      emps: filteredEmployees.filter(e => {
+        const isVacationThisMonth = Object.keys(manualEdits).some(key =>
+          key.startsWith(`${e.id}-${ano}-${monthsMap[mes]}-`) && manualEdits[key] === 'FE'
+        );
+        return e.shift === 'T3' && e.status === 'ativo' && !isVacationThisMonth;
+      })
+    },
+    {
+      label: 'T4 (22:00-06:35)',
+      shift: 'T4',
+      emps: filteredEmployees.filter(e => {
+        const isVacationThisMonth = Object.keys(manualEdits).some(key =>
+          key.startsWith(`${e.id}-${ano}-${monthsMap[mes]}-`) && manualEdits[key] === 'FE'
+        );
+        return e.shift === 'T4' && e.status === 'ativo' && !isVacationThisMonth;
+      })
+    },
   ];
-  const feriasList = filteredEmployees.filter(e => e.status === 'ferias');
+
+  const feriasList = filteredEmployees.filter(e => {
+    const isVacationThisMonth = Object.keys(manualEdits).some(key =>
+      key.startsWith(`${e.id}-${ano}-${monthsMap[mes]}-`) && manualEdits[key] === 'FE'
+    );
+    return e.status === 'ferias' || isVacationThisMonth;
+  });
 
   // Compute stats for selected day
   const summaryDay = selectedDay || todayDate || 1;
