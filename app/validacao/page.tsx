@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ShiftType, Employee } from '../data/employees';
+import { Employee, ScaleEdit } from '../data/employees';
 import { CellValue } from '../escalas/page';
 
 // Horários de Turno para Cálculo de Interjornada (11h)
@@ -64,7 +64,7 @@ export default function Validacao() {
 
       if (data) {
         const editsMap: Record<string, string> = {};
-        data.forEach(edit => {
+        (data as ScaleEdit[]).forEach(edit => {
           const dateParts = edit.date.split('-');
           const day = parseInt(dateParts[2], 10);
           const key = `${edit.employee_id}-${ano}-${monthNum}-${day}`;

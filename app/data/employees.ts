@@ -8,6 +8,12 @@ export interface Employee {
     sex: 'M' | 'F';
 }
 
+export interface ScaleEdit {
+    employee_id: string;
+    date: string;
+    shift_value: string;
+}
+
 export const employees: Employee[] = [
     // T1 (06:00-15:48) — 20 colaboradores
     { id: 'T1-01', matricula: 'T1-01', name: 'Carlos da Silva', shift: 'T1', status: 'ativo', sex: 'M' },

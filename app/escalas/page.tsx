@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { ShiftType, Employee } from '@/app/data/employees';
+import { Employee, ScaleEdit } from '@/app/data/employees';
 
 // ===== TIPOS =====
 export type CellValue = 'T1' | 'T2' | 'T3' | 'T4' | 'FG' | 'FE' | 'FR' | 'FF' | 'COM' | 'DSR';
@@ -78,7 +78,7 @@ export default function Escalas() {
 
       if (data) {
         const editsMap: Record<string, string> = {};
-        data.forEach(edit => {
+        (data as ScaleEdit[]).forEach(edit => {
           const dateParts = edit.date.split('-'); // YYYY-MM-DD
           const day = parseInt(dateParts[2], 10);
           const key = `${edit.employee_id}-${ano}-${monthNum}-${day}`;
