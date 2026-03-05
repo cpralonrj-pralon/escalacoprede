@@ -1,4 +1,89 @@
+'use client';
+import { useState, useEffect } from 'react';
+import Image from 'next/image';
+import { supabase } from '@/lib/supabase';
+import { Employee } from './data/employees';
+
 export default function Dashboard() {
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const fetchEmployees = async () => {
+    setIsLoading(true);
+    const { data } = await supabase.from('employees').select('*');
+    if (data) setEmployees(data as Employee[]);
+    setIsLoading(false);
+  };
+  const getWeekCoverage = () => {
+    const coverage = {
+      t1: [0, 0, 0, 0, 0, 0, 0], // seg to dom
+      t2t3: [0, 0, 0, 0, 0, 0, 0],
+      t4: [0, 0, 0, 0, 0, 0, 0]
+    };
+    const typicalWeekDays = [1, 2, 3, 4, 5, 6, 7]; // monday to sunday
+    const firstDayOfWeek = 1; // standardizing on Monday
+
+    employees.forEach((emp, idx) => {
+      if (emp.status === 'ferias') return;
+      const checkNormalOff = (d: number) => {
+        const wd = (d - 1 + firstDayOfWeek) % 7;
+        if (emp.sex === 'F' && wd === 0) {
+          let sundaysCount = 0;
+          for (let i = 1; i <= d; i++) { if ((i - 1 + firstDayOfWeek) % 7 === 0) sundaysCount++; }
+          if (sundaysCount === 1 || sundaysCount === 3) return true;
+        }
+        const folgaDay = (idx % 6);
+        if (wd === folgaDay && wd !== 0) return true;
+        if (wd === 0 && idx % 2 === 0) return true;
+        if (wd === 6) {
+          let saturdaysCount = 0;
+          for (let i = 1; i <= d; i++) { if ((i - 1 + firstDayOfWeek) % 7 === 6) saturdaysCount++; }
+          if ((idx + saturdaysCount) % 2 === 0) return true;
+        }
+        return false;
+      };
+
+      typicalWeekDays.forEach((d, dayIndex) => {
+        if (!checkNormalOff(d)) {
+          if (emp.shift === 'T1') coverage.t1[dayIndex]++;
+          if (emp.shift === 'T2' || emp.shift === 'T3') coverage.t2t3[dayIndex]++;
+          if (emp.shift === 'T4') coverage.t4[dayIndex]++;
+        }
+      });
+    });
+    return coverage;
+  };
+
+  const cov = getWeekCoverage();
+
+  const getShiftColor = (val: number, type: 'T1' | 'T2T3' | 'T4' | 'TOTAL') => {
+    if (type === 'TOTAL') {
+      if (val >= 30) return 'bg-green-500 text-white';
+      if (val >= 25) return 'bg-yellow-400 text-slate-900';
+      return 'bg-red-500 text-white';
+    }
+    if (type === 'T1') {
+      if (val >= 17) return 'bg-green-500 text-white';
+      if (val >= 14) return 'bg-yellow-400 text-slate-900';
+      return 'bg-red-500 text-white';
+    }
+    if (type === 'T2T3') {
+      if (val >= 13) return 'bg-green-500 text-white';
+      if (val >= 11) return 'bg-yellow-400 text-slate-900';
+      return 'bg-red-500 text-white';
+    }
+    if (type === 'T4') {
+      if (val >= 4) return 'bg-green-500 text-white';
+      if (val >= 3) return 'bg-yellow-400 text-slate-900';
+      return 'bg-red-500 text-white';
+    }
+    return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300';
+  };
+
   return (
     <>
       <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-background-dark flex items-center justify-between px-8 sticky top-0 z-10">
@@ -26,8 +111,14 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-none">Total Colaboradores</p>
-              <h3 className="text-2xl font-bold mt-2">85</h3>
-              <p className="text-xs text-green-500 font-semibold mt-1">▲ +5% vs mês passado</p>
+              <h3 className="text-2xl font-bold mt-2">{employees.length}</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                T1:{employees.filter(e => e.shift === 'T1' && e.status === 'ativo').length} |
+                T2:{employees.filter(e => e.shift === 'T2' && e.status === 'ativo').length} |
+                T3:{employees.filter(e => e.shift === 'T3' && e.status === 'ativo').length} |
+                T4:{employees.filter(e => e.shift === 'T4' && e.status === 'ativo').length} |
+                Férias:{employees.filter(e => e.status === 'ferias').length}
+              </p>
             </div>
           </div>
           <div className="bg-white dark:bg-background-dark p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
@@ -36,8 +127,8 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-none">Alertas de Cobertura</p>
-              <h3 className="text-2xl font-bold mt-2 text-red-600 dark:text-red-400">3</h3>
-              <p className="text-xs text-slate-400 mt-1">Crítico: Turno Noite</p>
+              <h3 className="text-2xl font-bold mt-2 text-red-600 dark:text-red-400">2</h3>
+              <p className="text-xs text-slate-400 mt-1">Déficit: Sáb e Dom</p>
             </div>
           </div>
           <div className="bg-white dark:bg-background-dark p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
@@ -46,8 +137,8 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-none">Em Férias</p>
-              <h3 className="text-2xl font-bold mt-2">2</h3>
-              <p className="text-xs text-slate-400 mt-1">Próximos: 4 (Maio)</p>
+              <h3 className="text-2xl font-bold mt-2">3</h3>
+              <p className="text-xs text-slate-400 mt-1">Limite: 3/mês</p>
             </div>
           </div>
         </section>
@@ -57,38 +148,53 @@ export default function Dashboard() {
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold">Horas por Turno</h3>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-500">Semana Atual</span>
-                <span className="text-sm font-bold text-green-500">+12%</span>
+                <span className="text-sm text-slate-500">Colaboradores por Turno</span>
               </div>
             </div>
-            <div className="h-64 flex items-end justify-between gap-4 px-2">
-              <div className="flex-1 flex flex-col items-center group">
-                <div className="w-full bg-primary/20 rounded-t-lg relative flex flex-col justify-end" style={{ height: '35%' }}>
-                  <div className="w-full bg-primary rounded-t-lg h-3/4"></div>
-                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded">280h</span>
+            <div className="h-48 flex items-stretch justify-between gap-4 px-2 mt-4 pb-4 border-b border-slate-100 dark:border-slate-800/50">
+              <div className="flex-1 flex flex-col items-center justify-end group">
+                <div
+                  className="w-full bg-primary rounded-t-lg relative flex flex-col justify-end transition-all"
+                  style={{ height: `${(employees.filter(e => e.shift === 'T1').length / (employees.length || 1)) * 100}%` }}
+                >
+                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-md font-bold text-center w-full whitespace-nowrap">
+                    {employees.filter(e => e.shift === 'T1').length} colab.
+                  </span>
                 </div>
-                <p className="text-xs mt-4 font-semibold text-slate-500 uppercase tracking-wider">Manhã</p>
+                <p className="text-[11px] mt-2 font-bold text-slate-500 uppercase tracking-tighter whitespace-nowrap">T1 (06-15h)</p>
               </div>
-              <div className="flex-1 flex flex-col items-center group">
-                <div className="w-full bg-primary/20 rounded-t-lg relative flex flex-col justify-end" style={{ height: '85%' }}>
-                  <div className="w-full bg-primary rounded-t-lg h-4/5"></div>
-                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded">420h</span>
+              <div className="flex-1 flex flex-col items-center justify-end group">
+                <div
+                  className="w-full bg-primary rounded-t-lg relative flex flex-col justify-end transition-all"
+                  style={{ height: `${(employees.filter(e => e.shift === 'T2').length / (employees.length || 1)) * 100}%` }}
+                >
+                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-md font-bold text-center w-full whitespace-nowrap">
+                    {employees.filter(e => e.shift === 'T2').length} colab.
+                  </span>
                 </div>
-                <p className="text-xs mt-4 font-semibold text-slate-500 uppercase tracking-wider">Tarde</p>
+                <p className="text-[11px] mt-2 font-bold text-slate-500 uppercase tracking-tighter whitespace-nowrap">T2 (13-22h)</p>
               </div>
-              <div className="flex-1 flex flex-col items-center group">
-                <div className="w-full bg-primary/20 rounded-t-lg relative flex flex-col justify-end" style={{ height: '95%' }}>
-                  <div className="w-full bg-primary rounded-t-lg h-full"></div>
-                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded">510h</span>
+              <div className="flex-1 flex flex-col items-center justify-end group">
+                <div
+                  className="w-full bg-primary rounded-t-lg relative flex flex-col justify-end transition-all"
+                  style={{ height: `${(employees.filter(e => e.shift === 'T3').length / (employees.length || 1)) * 100}%` }}
+                >
+                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-md font-bold text-center w-full whitespace-nowrap">
+                    {employees.filter(e => e.shift === 'T3').length} colab.
+                  </span>
                 </div>
-                <p className="text-xs mt-4 font-semibold text-slate-500 uppercase tracking-wider">Noite</p>
+                <p className="text-[11px] mt-2 font-bold text-slate-500 uppercase tracking-tighter whitespace-nowrap">T3 (14-23h)</p>
               </div>
-              <div className="flex-1 flex flex-col items-center group">
-                <div className="w-full bg-primary/20 rounded-t-lg relative flex flex-col justify-end" style={{ height: '25%' }}>
-                  <div className="w-full bg-primary rounded-t-lg h-2/3"></div>
-                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded">120h</span>
+              <div className="flex-1 flex flex-col items-center justify-end group">
+                <div
+                  className="w-full bg-primary rounded-t-lg relative flex flex-col justify-end transition-all"
+                  style={{ height: `${(employees.filter(e => e.shift === 'T4').length / (employees.length || 1)) * 100}%` }}
+                >
+                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-md font-bold text-center w-full whitespace-nowrap">
+                    {employees.filter(e => e.shift === 'T4').length} colab.
+                  </span>
                 </div>
-                <p className="text-xs mt-4 font-semibold text-slate-500 uppercase tracking-wider">Madrugada</p>
+                <p className="text-[11px] mt-2 font-bold text-slate-500 uppercase tracking-tighter whitespace-nowrap">T4 (22-06h)</p>
               </div>
             </div>
           </div>
@@ -100,9 +206,9 @@ export default function Dashboard() {
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-bold text-slate-400 w-4">1</span>
                   <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <img className="w-full h-full object-cover" alt="User avatar male" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCrBsVo7oV1Eo1kTQhThCSLlnjZFzML7Am5RhzqxKcFR9puN3bRl7BW8B-0d2h9kRh4zto2aMa_X7WQzJu7oCd1d7VQOy-YGZ3lqStbJJOG76i7v-ZA44LAZrov21Ms8HQVEQXaPcwZF9fmmil1c_nFlAd24NfaEw7OTG6ZMf0OgImCRIk1N1cunGlEwFeRiDEtYtx5SHDO3f5RagOp9u2ZkIhj7sZIqqOMhKMFvnj9ZAvy2q-0_vkuCuVNRFGgVXW2yMpJCpxkkiU" />
+                    <Image className="w-full h-full object-cover" alt="User avatar male" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCrBsVo7oV1Eo1kTQhThCSLlnjZFzML7Am5RhzqxKcFR9puN3bRl7BW8B-0d2h9kRh4zto2aMa_X7WQzJu7oCd1d7VQOy-YGZ3lqStbJJOG76i7v-ZA44LAZrov21Ms8HQVEQXaPcwZF9fmmil1c_nFlAd24NfaEw7OTG6ZMf0OgImCRIk1N1cunGlEwFeRiDEtYtx5SHDO3f5RagOp9u2ZkIhj7sZIqqOMhKMFvnj9ZAvy2q-0_vkuCuVNRFGgVXW2yMpJCpxkkiU" width={32} height={32} />
                   </div>
-                  <span className="text-sm font-medium">Carlos Silva</span>
+                  <span className="text-sm font-medium">Carlos da Silva</span>
                 </div>
                 <span className="text-xs font-bold px-2 py-1 bg-primary/10 text-primary rounded-full">176h</span>
               </div>
@@ -110,9 +216,9 @@ export default function Dashboard() {
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-bold text-slate-400 w-4">2</span>
                   <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <img className="w-full h-full object-cover" alt="User avatar female" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBKZo7h9ubyRgziA03nT-wxkhuHSrm6PdhcPe0rf65abtKIn6CETfEQRmYIQ8wXvXXW3s_2jYzVQv2lpV2yK5VAFLcVx6gQfDuPM1De-ifXl-e23FtEL6mjwj2TNZ2kEkKo3LxuI1kCv_ZKslZJFillpRjOcEUk7VmdjLRP_cd-nj9E36MhIfDXUVYVMt3hgDnM8x2PN7uoNv9Wg0OOHaddXGZWNdDO9-nVJV0YQfVJ933M7c6CjP7bjgwwCMylMy5yKDkqmu2PJwI" />
+                    <Image className="w-full h-full object-cover" alt="User avatar female" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBKZo7h9ubyRgziA03nT-wxkhuHSrm6PdhcPe0rf65abtKIn6CETfEQRmYIQ8wXvXXW3s_2jYzVQv2lpV2yK5VAFLcVx6gQfDuPM1De-ifXl-e23FtEL6mjwj2TNZ2kEkKo3LxuI1kCv_ZKslZJFillpRjOcEUk7VmdjLRP_cd-nj9E36MhIfDXUVYVMt3hgDnM8x2PN7uoNv9Wg0OOHaddXGZWNdDO9-nVJV0YQfVJ933M7c6CjP7bjgwwCMylMy5yKDkqmu2PJwI" width={32} height={32} />
                   </div>
-                  <span className="text-sm font-medium">Ana Souza</span>
+                  <span className="text-sm font-medium">Ana B. Rocha</span>
                 </div>
                 <span className="text-xs font-bold px-2 py-1 bg-primary/10 text-primary rounded-full">168h</span>
               </div>
@@ -120,9 +226,9 @@ export default function Dashboard() {
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-bold text-slate-400 w-4">3</span>
                   <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <img className="w-full h-full object-cover" alt="User avatar male" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBx_u1Apyq-jm0tMvyvchDIb4_GtpUGaFfoHcZsGhL4xsv-pQUforLtFPIuXmzJH68YeYY95UAdJyR3uo8TWNcRkO2GEwRMa9bbF-TL7H1ivWl1dQ2GbrpCEzL6dUiXxUk9qlfZ4pLHrLS2KHnZ3WRsFbPmRLeBMP2OiPdZGcVd4APUFnhDmsYrnRSZVM0wktu9rrWekPyjTBn1mJ98DAdug8dlYIu4jgvIux938vrylusK8t9MQ43RS7KhWt9bUflYNKqM_fMcy2Y" />
+                    <Image className="w-full h-full object-cover" alt="User avatar male" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBx_u1Apyq-jm0tMvyvchDIb4_GtpUGaFfoHcZsGhL4xsv-pQUforLtFPIuXmzJH68YeYY95UAdJyR3uo8TWNcRkO2GEwRMa9bbF-TL7H1ivWl1dQ2GbrpCEzL6dUiXxUk9qlfZ4pLHrLS2KHnZ3WRsFbPmRLeBMP2OiPdZGcVd4APUFnhDmsYrnRSZVM0wktu9rrWekPyjTBn1mJ98DAdug8dlYIu4jgvIux938vrylusK8t9MQ43RS7KhWt9bUflYNKqM_fMcy2Y" width={32} height={32} />
                   </div>
-                  <span className="text-sm font-medium">Roberto Dias</span>
+                  <span className="text-sm font-medium">Roberto Almeida</span>
                 </div>
                 <span className="text-xs font-bold px-2 py-1 bg-primary/10 text-primary rounded-full">160h</span>
               </div>
@@ -130,9 +236,9 @@ export default function Dashboard() {
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-bold text-slate-400 w-4">4</span>
                   <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <img className="w-full h-full object-cover" alt="User avatar female" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCIbZxat8bf41ZL1Hsk_p5nO792jlXFGJfzxNPdKLMiNMIy3akc3YSlmdLVisiGKjaV8E0vFMSa_ajZyXVIbPt0rigqGJDdEvBc-bUqM3HuhQCpCtFBpfuaLBGlHi-0LG83w23ZKFYccL253P_LOVh7Y9g81Z_NHuqZTmiRsLBq9s6tVSWk6lpMh8_4NSZXdC5K6ZnClubcqpcKUpLIvRw8kuCtR9UB_KVZwGq0ig2cBg5QWmD9LH0zFZ46zV35X9CCEzVJSk0W3j4" />
+                    <Image className="w-full h-full object-cover" alt="User avatar female" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCIbZxat8bf41ZL1Hsk_p5nO792jlXFGJfzxNPdKLMiNMIy3akc3YSlmdLVisiGKjaV8E0vFMSa_ajZyXVIbPt0rigqGJDdEvBc-bUqM3HuhQCpCtFBpfuaLBGlHi-0LG83w23ZKFYccL253P_LOVh7Y9g81Z_NHuqZTmiRsLBq9s6tVSWk6lpMh8_4NSZXdC5K6ZnClubcqpcKUpLIvRw8kuCtR9UB_KVZwGq0ig2cBg5QWmD9LH0zFZ46zV35X9CCEzVJSk0W3j4" width={32} height={32} />
                   </div>
-                  <span className="text-sm font-medium">Juliana Lima</span>
+                  <span className="text-sm font-medium">Juliana Mendes</span>
                 </div>
                 <span className="text-xs font-bold px-2 py-1 bg-primary/10 text-primary rounded-full">158h</span>
               </div>
@@ -144,7 +250,7 @@ export default function Dashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h3 className="text-lg font-bold">Cobertura Semanal</h3>
-              <p className="text-sm text-slate-500">Visualização de gaps de pessoal (Meta: &gt;25 colaboradores por dia)</p>
+              <p className="text-sm text-slate-500">Visualização de gaps de pessoal (Meta: &gt;25 colaboradores manhã+tarde)</p>
             </div>
             <div className="flex items-center gap-4 text-xs">
               <div className="flex items-center gap-1"><span className="w-3 h-3 bg-red-500 rounded-sm"></span> Crítico (&lt; 25)</div>
@@ -167,35 +273,48 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td className="p-2 text-sm font-semibold border-b border-slate-100 dark:border-slate-800">Manhã</td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-green-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">32</div></td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-green-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">31</div></td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-yellow-400 h-10 flex items-center justify-center text-slate-900 font-bold text-xs rounded-lg">26</div></td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-green-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">30</div></td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-green-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">35</div></td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-red-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">22</div></td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-red-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">21</div></td>
+                <tr className="border-b border-slate-100 dark:border-slate-800">
+                  <td className="p-2 text-sm font-semibold whitespace-nowrap">T1 (06-15h)</td>
+                  {cov.t1.map((val, i) => (
+                    <td key={i} className="p-1">
+                      <div className={`h-10 flex items-center justify-center font-bold text-xs rounded-lg shadow-sm ${getShiftColor(val, 'T1')}`}>
+                        {val}
+                      </div>
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b border-slate-100 dark:border-slate-800">
+                  <td className="p-2 text-sm font-semibold whitespace-nowrap">T2+T3 (13-23h)</td>
+                  {cov.t2t3.map((val, i) => (
+                    <td key={i} className="p-1">
+                      <div className={`h-10 flex items-center justify-center font-bold text-xs rounded-lg shadow-sm ${getShiftColor(val, 'T2T3')}`}>
+                        {val}
+                      </div>
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b border-slate-100 dark:border-slate-800">
+                  <td className="p-2 text-sm font-bold whitespace-nowrap text-primary">Total M+T</td>
+                  {cov.t1.map((val, i) => {
+                    const total = val + cov.t2t3[i];
+                    return (
+                      <td key={i} className="p-1">
+                        <div className={`h-10 flex items-center justify-center font-bold text-xs rounded-lg shadow-sm ${getShiftColor(total, 'TOTAL')}`}>
+                          {total}
+                        </div>
+                      </td>
+                    );
+                  })}
                 </tr>
                 <tr>
-                  <td className="p-2 text-sm font-semibold border-b border-slate-100 dark:border-slate-800">Tarde</td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-green-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">34</div></td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-green-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">32</div></td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-green-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">31</div></td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-green-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">32</div></td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-green-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">38</div></td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-yellow-400 h-10 flex items-center justify-center text-slate-900 font-bold text-xs rounded-lg">28</div></td>
-                  <td className="p-1 border-b border-slate-100 dark:border-slate-800"><div className="bg-yellow-400 h-10 flex items-center justify-center text-slate-900 font-bold text-xs rounded-lg">27</div></td>
-                </tr>
-                <tr>
-                  <td className="p-2 text-sm font-semibold">Noite</td>
-                  <td className="p-1"><div className="bg-red-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">18</div></td>
-                  <td className="p-1"><div className="bg-red-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">18</div></td>
-                  <td className="p-1"><div className="bg-red-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">20</div></td>
-                  <td className="p-1"><div className="bg-red-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">19</div></td>
-                  <td className="p-1"><div className="bg-yellow-400 h-10 flex items-center justify-center text-slate-900 font-bold text-xs rounded-lg">25</div></td>
-                  <td className="p-1"><div className="bg-red-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">15</div></td>
-                  <td className="p-1"><div className="bg-red-500 h-10 flex items-center justify-center text-white font-bold text-xs rounded-lg">14</div></td>
+                  <td className="p-2 text-sm font-semibold whitespace-nowrap">T4 (22-06h)</td>
+                  {cov.t4.map((val, i) => (
+                    <td key={i} className="p-1">
+                      <div className={`h-10 flex items-center justify-center font-bold text-xs rounded-lg shadow-sm ${getShiftColor(val, 'T4')}`}>
+                        {val}
+                      </div>
+                    </td>
+                  ))}
                 </tr>
               </tbody>
             </table>

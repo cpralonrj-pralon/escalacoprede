@@ -1,20 +1,55 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Sistame Escala 4.0 🚀
 
-# Run and deploy your AI Studio app
+Sistema premium de gestão de escalas e horários para equipes, com integração total ao Supabase.
 
-This contains everything you need to run your app locally.
+## ✨ Funcionalidades
 
-View your app in AI Studio: https://ai.studio/apps/a4b67917-0dd8-43a0-ac01-c80caaf839d9
+- **Escalas Dinâmicas**: Visualização e edição de escalas mensais.
+- **Validação Inteligente**: Verificação automática de conflitos e cobertura mínima.
+- **Gestão de Equipe**: Cadastro de funcionários, turnos e status (ativo/férias).
+- **Feriados**: Importação automática de feriados nacionais e gestão de feriados locais.
+- **Dashboard**: KPI's de cobertura e horas por turno em tempo real.
 
-## Run Locally
+## 🛠️ Tecnologias
 
-**Prerequisites:**  Node.js
+- **Frontend**: Next.js 15+ (App Router), Tailwind CSS.
+- **Backend**: Supabase (Database & Auth).
+- **Scripts**: Node.js para seeding e automação de schema.
 
+## 🚀 Como Rodar Localmente
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### Pré-requisitos
+- Node.js instalado.
+- Projeto no Supabase criado.
+
+### Passo a Passo
+
+1. **Instalar Dependências**:
+   ```bash
+   npm install
+   ```
+
+2. **Configurar Ambiente**:
+   - Renomeie o arquivo `.env.example` para `.env.local`.
+   - Preencha as chaves do Supabase (URL, Anon Key, Service Role e DATABASE_URL).
+
+3. **Preparar o Banco de Dados**:
+   - Execute o script SQL contido em `supabase_schema.sql` no SQL Editor do Supabase OU use o script Node:
+     ```bash
+     node run_sql.js
+     ```
+
+4. **Popular Dados Iniciais (Opcional)**:
+   ```bash
+   node seed_supabase.js
+   ```
+
+5. **Iniciar o Desenvolvimento**:
+   ```bash
+   npm run dev
+   ```
+
+O sistema estará disponível em `http://localhost:3000`.
+
+---
+Desenvolvido por COp Rede.

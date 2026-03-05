@@ -16,7 +16,7 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-background-dark flex flex-col shrink-0">
+    <aside className="hidden lg:flex w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-background-dark flex-col shrink-0">
       <div className="p-6 flex items-center gap-3">
         <div className="bg-primary rounded-lg p-1.5">
           <span className="material-symbols-outlined text-white text-2xl">layers</span>
@@ -33,11 +33,10 @@ export default function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isActive
+                ? 'bg-primary/10 text-primary'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
             >
               <span className="material-symbols-outlined">{item.icon}</span>
               <span className="text-sm font-medium">{item.name}</span>
@@ -47,7 +46,7 @@ export default function Sidebar() {
       </nav>
       <div className="p-4 mt-auto border-t border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">AD</div>
+          <div className="w-8 h-8 rounded-full bg-primary-dim flex items-center justify-center text-primary font-bold text-xs">AD</div>
           <div className="flex-1 overflow-hidden">
             <p className="text-sm font-medium truncate">Admin User</p>
             <p className="text-xs text-slate-500 truncate">admin@sistame.com</p>

@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
 @theme {
   --color-primary: #1152d4;
@@ -13,6 +12,10 @@
   --color-shift-fg: #22c55e;
   --color-shift-fe: #000000;
   --color-shift-fr: #4b5563;
+
+  /* Variantes de cores para evitar color-mix experimental */
+  --color-primary-light: rgba(17, 82, 212, 0.1);
+  --color-primary-dim: rgba(17, 82, 212, 0.2);
 }
 
 @layer utilities {
@@ -20,18 +23,21 @@
     height: 8px;
     width: 8px;
   }
+
   .custom-scrollbar::-webkit-scrollbar-track {
     background: #f1f1f1;
   }
+
   .custom-scrollbar::-webkit-scrollbar-thumb {
     background: #cbd5e1;
     border-radius: 4px;
   }
+
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
   .no-scrollbar {
     -ms-overflow-style: none;
-    scrollbar-width: none;
   }
 }
