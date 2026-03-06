@@ -237,11 +237,13 @@ export default function Escalas() {
 
   const getWeeklyHours = (emp: Employee, dayInWeek: number) => {
     const dateObj = new Date(parseInt(ano), parseInt(monthsMap[mes]) - 1, dayInWeek || 1);
-    const dayOfWeek = dateObj.getDay();
-    const diffToSun = dayOfWeek;
+    const dayOfWeek = dateObj.getDay(); // 0 = Domingo
+    // Converte para Segunda-Domingo (BR Standard)
+    const diffToMon = (dayOfWeek + 6) % 7;
+
     let total = 0;
     for (let i = 0; i < 7; i++) {
-      const d = dayInWeek - diffToSun + i;
+      const d = dayInWeek - diffToMon + i;
       if (d >= 1 && d <= numDays) {
         const { val } = getCell(emp, d);
         total += SHIFT_DURATIONS[val] || 0;
@@ -351,8 +353,67 @@ export default function Escalas() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto p-8 pt-6">
-        {/* TABS ESTATÉGICAS */}
+      <div className="flex-1 overflow-auto custom-scrollbar p-8 pt-4">
+        {/* TOP KPIs: Utilização da Força de Trabalho (Ported from Dashboard) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+          {/* Card Total (Geral) */}
+          <div className="bg-[#0f1423] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden group">
+            <div className={`absolute -top-4 -right-4 w-20 h-20 ${getStats(todayDate || 1).t1 + getStats(todayDate || 1).t2 + getStats(todayDate || 1).t3 < 25 ? 'bg-red-600/10 animate-pulse' : 'bg-blue-600/5'} rounded-full blur-2xl`}></div>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Utilização Total</h4>
+              {getStats(todayDate || 1).t1 + getStats(todayDate || 1).t2 + getStats(todayDate || 1).t3 < 25 && (
+                <span className="flex items-center gap-1 text-[8px] font-black text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-full border border-red-500/20 animate-pulse">
+                  <span className="material-symbols-outlined text-[10px]">warning</span> DÉFICIT
+                </span>
+              )}
+            </div>
+            <div className="flex items-end justify-between">
+              <div>
+                <div className="text-3xl font-black text-white tracking-tighter">
+                  {getStats(todayDate || 1).ativos} <span className="text-slate-700 text-lg">/ {employees.length}</span>
+                </div>
+                <div className="text-[10px] font-black text-blue-500 mt-1 uppercase tracking-tighter">Colaboradores Hoje</div>
+              </div>
+              <div className="bg-blue-500/10 text-blue-500 font-black text-[14px] px-2 py-1 rounded-lg border border-blue-500/20">
+                {Math.round((getStats(todayDate || 1).ativos / (employees.length || 1)) * 100)}%
+              </div>
+            </div>
+          </div>
+
+          {/* Cards por Turno */}
+          {['T1', 'T2', 'T3', 'T4'].map((t) => {
+            const stats = getStats(todayDate || 1);
+            const active = stats[t.toLowerCase() as keyof typeof stats] as number;
+            const totalInShift = employees.filter(e => e.shift === t).length;
+            const pct = totalInShift > 0 ? Math.round((active / totalInShift) * 100) : 0;
+
+            const shiftColors: Record<string, string> = {
+              T1: 'text-blue-400 border-blue-400/20 bg-blue-400/5',
+              T2: 'text-purple-400 border-purple-400/20 bg-purple-400/5',
+              T3: 'text-red-400 border-red-400/20 bg-red-400/5',
+              T4: 'text-amber-400 border-amber-400/20 bg-amber-400/5'
+            };
+
+            return (
+              <div key={t} className="bg-[#0f1423] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden group">
+                <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Utilização {t}</h4>
+                <div className="flex items-end justify-between">
+                  <div>
+                    <div className="text-2xl font-black text-white tracking-tighter">
+                      {active} <span className="text-slate-700 text-base">/ {totalInShift}</span>
+                    </div>
+                    <div className="text-[10px] font-black text-slate-500 mt-1 uppercase tracking-tighter">Escalados</div>
+                  </div>
+                  <div className={`font-black text-[12px] px-2 py-1 rounded-lg border ${shiftColors[t]}`}>
+                    {pct}%
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* TABS DE NAVEGAÇÃO */}
         <div className="flex gap-1 mb-8 bg-white/5 p-1 rounded-2xl w-fit border border-white/10">
           <button onClick={() => setActiveTab('mensal')} className={`py-2 px-6 text-xs font-black rounded-xl transition-all ${activeTab === 'mensal' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:text-slate-300'}`}>ESCALA MENSAL</button>
           <button onClick={() => setActiveTab('ajustes')} className={`py-2 px-6 text-xs font-black rounded-xl transition-all ${activeTab === 'ajustes' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:text-slate-300'}`}>VALIDAÇÃO</button>
@@ -375,16 +436,22 @@ export default function Escalas() {
                         const isWE = wd === 0 || wd === 6;
                         const isH = feriadosMes.includes(d);
                         const isToday = d === todayDate && mes === todayMonthStr && ano === todayYearStr;
+                        const isSelected = d === selectedDay;
 
                         return (
-                          <th key={d} className={`px-1 py-3 min-w-[34px] border-r border-white/5 text-center transition-colors relative ${isH ? 'bg-red-500/20 text-red-500' : isWE ? 'bg-white/[0.03]' : ''}`}>
+                          <th
+                            key={d}
+                            onClick={() => setSelectedDay(d)}
+                            className={`px-1 py-3 min-w-[34px] border-r border-white/5 text-center transition-all relative cursor-pointer group hover:bg-white/[0.05] ${isSelected ? 'bg-blue-600/10' : ''} ${isH ? 'bg-red-500/20 text-red-500' : isWE ? 'bg-white/[0.03]' : ''}`}
+                          >
                             {isToday && (
-                              <div className="absolute -top-1 left-1/2 -translate-x-1/2 text-red-500 animate-bounce">
+                              <div className="absolute -top-1 left-1/2 -translate-x-1/2 text-red-500 animate-bounce pointer-events-none">
                                 <span className="material-symbols-outlined text-[14px]">arrow_drop_down</span>
                               </div>
                             )}
-                            <div className="text-white font-black text-[11px] mb-0.5">{d}</div>
-                            <div className="text-[8px] uppercase font-bold text-slate-600 group-hover:text-slate-400">{['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'][wd]}</div>
+                            <div className={`transition-all font-black text-[11px] mb-0.5 ${isSelected ? 'text-blue-500 scale-110' : 'text-white'}`}>{d}</div>
+                            <div className={`text-[8px] uppercase font-bold transition-colors ${isSelected ? 'text-blue-400' : 'text-slate-600 group-hover:text-slate-400'}`}>{['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'][wd]}</div>
+                            {isSelected && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-500"></div>}
                           </th>
                         );
                       })}
@@ -413,8 +480,8 @@ export default function Escalas() {
                             </td>
                             <td className="text-center bg-white/[0.02] font-bold text-blue-400 border-r border-white/5">{getEmployeeMonthStats(emp).worked}</td>
                             <td className="text-center bg-white/[0.02] font-bold text-emerald-400 border-r border-white/5">{getEmployeeMonthStats(emp).totalOff}</td>
-                            <td className={`text-center bg-white/[0.02] font-black border-r border-white/5 ${getWeeklyHours(emp, todayDate || 1) > 44 ? 'text-red-500' : 'text-slate-400'}`}>
-                              {getWeeklyHours(emp, todayDate || 1)}h
+                            <td className={`text-center bg-white/[0.02] font-black border-r border-white/5 ${getWeeklyHours(emp, selectedDay || todayDate || 1) > 44 ? 'text-red-500' : 'text-slate-400'}`}>
+                              {getWeeklyHours(emp, selectedDay || todayDate || 1)}h
                             </td>
                             <td className={`text-center bg-white/[0.02] font-black border-r border-white/5 ${getMonthlyHours(emp) > 220 ? 'text-red-500' : 'text-slate-400'}`}>
                               {getMonthlyHours(emp)}h
@@ -427,13 +494,18 @@ export default function Escalas() {
                                     {val}
                                   </div>
                                   <select
-                                    className={`absolute inset-0 opacity-0 cursor-pointer ${isDragging ? 'pointer-events-none' : ''}`}
+                                    title="Ajuste manual de escala"
+                                    className={`absolute inset-0 opacity-0 cursor-pointer z-10 ${isDragging ? 'pointer-events-none' : ''}`}
                                     value={manualEdits[`${emp.id}-${ano}-${monthsMap[mes]}-${d}`] || 'AUTO'}
                                     onChange={e => handleManualEdit(emp.id, d, e.target.value)}
                                   >
-                                    <option value="AUTO">Automático</option>
-                                    <option value="T1">T1</option><option value="T2">T2</option><option value="T3">T3</option><option value="T4">T4</option>
-                                    <option value="FG">FG (Folga)</option><option value="FE">FE (Férias)</option>
+                                    <option value="AUTO" className="bg-[#0f1423] text-white">Automático</option>
+                                    <option value="T1" className="bg-[#0f1423] text-white">T1</option>
+                                    <option value="T2" className="bg-[#0f1423] text-white">T2</option>
+                                    <option value="T3" className="bg-[#0f1423] text-white">T3</option>
+                                    <option value="T4" className="bg-[#0f1423] text-white">T4</option>
+                                    <option value="FG" className="bg-[#0f1423] text-white">FG (Folga)</option>
+                                    <option value="FE" className="bg-[#0f1423] text-white">FE (Férias)</option>
                                   </select>
                                 </td>
                               );
@@ -549,7 +621,7 @@ export default function Escalas() {
                 <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Meta Diária (Uteis)</h4>
                 <div className="text-4xl font-black text-white tracking-tighter">25 / <span className="text-slate-700">30</span></div>
                 <div className="mt-4 h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500" style={{ width: '83%' }}></div>
+                  <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: '83%' }}></div>
                 </div>
               </div>
               <div className="bg-[#0f1423] p-8 rounded-3xl border border-white/5 shadow-2xl relative border-red-500/20">
@@ -586,6 +658,18 @@ export default function Escalas() {
         .custom-scrollbar::-webkit-scrollbar { height: 10px; width: 10px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; border: 2px solid #0f1423; }
+        
+        /* Fix para visibilidade do select em modo escuro */
+        select option {
+          background-color: #0f1423 !important;
+          color: white !important;
+          padding: 10px;
+        }
+        
+        select:focus {
+          outline: none;
+        }
+        
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.12); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
