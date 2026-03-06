@@ -10,20 +10,26 @@ interface Feriado {
   tipo?: 'Nacional' | 'Estadual' | 'Municipal' | 'Ponto Facultativo';
 }
 
-const feriadosNacionais2026 = [
+const feriados2026 = [
+  // Nacionais
   { date: '2026-01-01', name: 'Confraternização Universal', tipo: 'Nacional' },
-  { date: '2026-02-16', name: 'Carnaval', tipo: 'Ponto Facultativo' },
-  { date: '2026-02-17', name: 'Carnaval', tipo: 'Ponto Facultativo' },
   { date: '2026-04-03', name: 'Sexta-Feira Santa', tipo: 'Nacional' },
   { date: '2026-04-21', name: 'Tiradentes', tipo: 'Nacional' },
   { date: '2026-05-01', name: 'Dia do Trabalho', tipo: 'Nacional' },
-  { date: '2026-06-04', name: 'Corpus Christi', tipo: 'Ponto Facultativo' },
   { date: '2026-09-07', name: 'Independência do Brasil', tipo: 'Nacional' },
   { date: '2026-10-12', name: 'Nossa Sra. Aparecida', tipo: 'Nacional' },
   { date: '2026-11-02', name: 'Finados', tipo: 'Nacional' },
   { date: '2026-11-15', name: 'Proclamação da República', tipo: 'Nacional' },
   { date: '2026-11-20', name: 'Consciência Negra', tipo: 'Nacional' },
   { date: '2026-12-25', name: 'Natal', tipo: 'Nacional' },
+  // Estaduais RJ
+  { date: '2026-02-17', name: 'Carnaval (Feriado Estadual RJ)', tipo: 'Estadual' },
+  { date: '2026-04-23', name: 'Dia de São Jorge (RJ)', tipo: 'Estadual' },
+  // Municipais Rio de Janeiro
+  { date: '2026-01-20', name: 'São Sebastião (RJ)', tipo: 'Municipal' },
+  // Pontos Facultativos
+  { date: '2026-02-16', name: 'Carnaval (Ponto Facultativo)', tipo: 'Ponto Facultativo' },
+  { date: '2026-06-04', name: 'Corpus Christi', tipo: 'Ponto Facultativo' },
 ];
 
 export default function Configuracoes() {
@@ -40,8 +46,12 @@ export default function Configuracoes() {
 
   const fetchHolidays = async () => {
     setIsLoading(true);
-    const { data } = await supabase.from('holidays').select('*').order('date');
-    if (data) setFeriados(data as Feriado[]);
+    const { data, error } = await supabase.from('holidays').select('*').order('date');
+    if (error) {
+      console.error('Erro ao buscar feriados:', error);
+    } else if (data) {
+      setFeriados(data as Feriado[]);
+    }
     setIsLoading(false);
   };
 
@@ -49,7 +59,8 @@ export default function Configuracoes() {
     if (!novoFeriado.date || !novoFeriado.name) return;
     const { error } = await supabase.from('holidays').insert([{
       date: novoFeriado.date,
-      name: novoFeriado.name
+      name: novoFeriado.name,
+      tipo: novoFeriado.tipo
     }]);
 
     if (!error) {
@@ -66,11 +77,18 @@ export default function Configuracoes() {
 
   const handleImportFeriados = async () => {
     setImportStatus('loading');
-    const toInsert = feriadosNacionais2026.map(f => ({ date: f.date, name: f.name }));
-    await supabase.from('holidays').upsert(toInsert, { onConflict: 'date' });
+    const toInsert = feriados2026.map(f => ({ date: f.date, name: f.name, tipo: f.tipo }));
+    const { error } = await supabase.from('holidays').upsert(toInsert, { onConflict: 'date' });
 
-    setImportStatus('success');
-    fetchHolidays();
+    if (error) {
+      console.error('Erro ao importar feriados:', error);
+      setImportStatus('error');
+      alert(`Erro ao importar: ${error.message}`);
+    } else {
+      setImportStatus('success');
+      fetchHolidays();
+    }
+
     setTimeout(() => setImportStatus(null), 3000);
   };
 
@@ -269,7 +287,7 @@ export default function Configuracoes() {
                     {importStatus === 'success' && (
                       <div className="mb-4 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex items-center gap-3">
                         <span className="material-symbols-outlined text-emerald-600 text-[18px]">check_circle</span>
-                        <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Feriados nacionais de 2026 importados com sucesso!</p>
+                        <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Feriados de 2026 (Nacionais, RJ e Pontos Facultativos) importados com sucesso!</p>
                       </div>
                     )}
 

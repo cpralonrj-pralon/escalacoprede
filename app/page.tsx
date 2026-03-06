@@ -2,59 +2,178 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
-import { Employee } from './data/employees';
+import { Employee, ScaleEdit, ShiftType } from './data/employees';
+
+// ===== TIPOS =====
+export type CellValue = 'T1' | 'T2' | 'T3' | 'T4' | 'FG' | 'FE' | 'FR' | 'FF' | 'COM' | 'DSR';
+
+const SHIFT_HOURS: Record<string, { start: number; end: number }> = {
+  'T1': { start: 6.0, end: 15.8 },
+  'T2': { start: 13.0, end: 22.8 },
+  'T3': { start: 14.0, end: 23.8 },
+  'T4': { start: 22.0, end: 30.58 },
+  'FG': { start: 0, end: 0 },
+  'DSR': { start: 0, end: 0 },
+  'FE': { start: 0, end: 0 },
+  'FR': { start: 0, end: 0 },
+  'FF': { start: 0, end: 0 },
+  'COM': { start: 0, end: 0 },
+};
+
+const SHIFT_DURATIONS: Record<string, number> = {
+  'T1': 8.8, 'T2': 8.8, 'T3': 8.8, 'T4': 8.8,
+  'FG': 0, 'FE': 0, 'FF': 0, 'FR': 0, 'COM': 0, 'DSR': 0
+};
 
 export default function Dashboard() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [manualEdits, setManualEdits] = useState<Record<string, string>>({});
+  const [feriadosMes, setFeriadosMes] = useState<number[]>([]);
+
+  const now = new Date();
+  const todayDate = now.getDate();
+  const currentMonthNum = String(now.getMonth() + 1).padStart(2, '0');
+  const currentYearStr = now.getFullYear().toString();
+
+  const monthsMap: Record<string, string> = {
+    'Janeiro': '01', 'Fevereiro': '02', 'Março': '03', 'Abril': '04',
+    'Maio': '05', 'Junho': '06', 'Julho': '07', 'Agosto': '08',
+    'Setembro': '09', 'Outubro': '10', 'Novembro': '11', 'Dezembro': '12'
+  };
+
+  const getDaysInMonth = (m: number, y: number) => new Date(y, m, 0).getDate();
+  const getFirstDayOfWeek = (m: number, y: number) => new Date(y, m - 1, 1).getDay();
+
+  const numDays = getDaysInMonth(now.getMonth() + 1, now.getFullYear());
+  const firstDayOfWeek = getFirstDayOfWeek(now.getMonth() + 1, now.getFullYear());
 
   useEffect(() => {
-    fetchEmployees();
+    fetchData();
   }, []);
 
-  const fetchEmployees = async () => {
+  const fetchData = async () => {
     setIsLoading(true);
-    const { data } = await supabase.from('employees').select('*');
-    if (data) setEmployees(data as Employee[]);
+    const { data: emps } = await supabase.from('employees').select('*').order('name');
+    if (emps) setEmployees(emps as Employee[]);
+
+    const startDate = `${currentYearStr}-${currentMonthNum}-01`;
+    const endDate = `${currentYearStr}-${currentMonthNum}-${String(numDays).padStart(2, '0')}`;
+
+    const { data: edits } = await supabase.from('scale_edits').select('*').gte('date', startDate).lte('date', endDate);
+    if (edits) {
+      const map: Record<string, string> = {};
+      edits.forEach((e: any) => {
+        const d = parseInt(e.date.split('-')[2]);
+        map[`${e.employee_id}-${currentYearStr}-${currentMonthNum}-${d}`] = e.shift_value;
+      });
+      setManualEdits(map);
+    }
+
+    const { data: holidays } = await supabase.from('holidays').select('date').gte('date', startDate).lte('date', endDate);
+    if (holidays) setFeriadosMes(holidays.map((h: any) => parseInt(h.date.split('-')[2])));
+
     setIsLoading(false);
   };
+  const getCell = (emp: Employee, day: number): { val: CellValue, bg: string } => {
+    const key = `${emp.id}-${currentYearStr}-${currentMonthNum}-${day}`;
+
+    if (manualEdits[key]) {
+      const v = manualEdits[key] as CellValue;
+      const displayVal = (v === 'DSR' || v === 'COM') ? 'FG' : v;
+      const bgs: any = {
+        T1: 'bg-[#3b82f6]', T2: 'bg-[#8b5cf6]', T3: 'bg-[#ef4444]', T4: 'bg-[#f59e0b]',
+        FG: 'bg-[#10b981]', FE: 'bg-[#000000]', FF: 'bg-[#059669]', FR: 'bg-[#d97706]'
+      };
+      return { val: displayVal, bg: bgs[v] || 'bg-slate-700' };
+    }
+
+    if (emp.status === 'ferias') return { val: 'FE', bg: 'bg-[#000000]' };
+
+    const males = employees.filter(e => e.sex === 'M');
+    const females = employees.filter(e => e.sex === 'F');
+    const mIdx = males.indexOf(emp);
+    const fIdx = females.indexOf(emp);
+
+    const getTheoreticalOffType = (d: number): boolean => {
+      const wd = (d - 1 + firstDayOfWeek) % 7;
+      if (emp.sex === 'M') {
+        const pairs = [[1, 6], [2, 0], [3, 6], [4, 0], [5, 6], [0, 1], [2, 3]];
+        const myPair = pairs[mIdx % 7];
+        return wd === myPair[0] || wd === myPair[1];
+      } else {
+        const isF1 = fIdx % 2 === 0;
+        let sunCount = 0;
+        for (let i = 1; i <= d; i++) if ((i - 1 + firstDayOfWeek) % 7 === 0) sunCount++;
+        if (isF1) {
+          if (wd === 6) return true;
+          if (wd === 0 && sunCount % 2 !== 0) return true;
+          if (wd === 5 && sunCount % 2 === 0) return true;
+        } else {
+          if (wd === 0) return true;
+          if (wd === 1 && sunCount % 2 !== 0) return true;
+          if (wd === 6 && sunCount % 2 === 0) return true;
+        }
+      }
+      return false;
+    };
+
+    const isH = feriadosMes.includes(day);
+    const isOff = getTheoreticalOffType(day);
+    const gIdx = employees.indexOf(emp);
+
+    if (isH) {
+      if (gIdx % 2 !== 0) return { val: 'FF', bg: 'bg-[#059669]' };
+    }
+    if (isOff) return { val: 'FG', bg: 'bg-[#10b981]' };
+
+    const colors: any = { T1: 'bg-[#3b82f6]', T2: 'bg-[#8b5cf6]', T3: 'bg-[#ef4444]', T4: 'bg-[#f59e0b]' };
+    return { val: emp.shift as CellValue, bg: colors[emp.shift] || 'bg-slate-700' };
+  };
+
+  const getMonthlyHours = (emp: Employee) => {
+    let total = 0;
+    for (let d = 1; d <= numDays; d++) {
+      const { val } = getCell(emp, d);
+      total += SHIFT_DURATIONS[val] || 0;
+    }
+    return Math.round(total * 10) / 10;
+  };
+
+  const getDayStats = (dayNum: number) => {
+    const stats = { t1: 0, t2: 0, t3: 0, t4: 0, fg: 0, active: 0 };
+    employees.forEach(emp => {
+      const { val } = getCell(emp, dayNum);
+      if (val === 'T1') { stats.t1++; stats.active++; }
+      else if (val === 'T2') { stats.t2++; stats.active++; }
+      else if (val === 'T3') { stats.t3++; stats.active++; }
+      else if (val === 'T4') { stats.t4++; stats.active++; }
+      else if (val === 'FG') stats.fg++;
+    });
+    return stats;
+  };
+
   const getWeekCoverage = () => {
     const coverage = {
-      t1: [0, 0, 0, 0, 0, 0, 0], // seg to dom
+      t1: [0, 0, 0, 0, 0, 0, 0],
       t2t3: [0, 0, 0, 0, 0, 0, 0],
       t4: [0, 0, 0, 0, 0, 0, 0]
     };
-    const typicalWeekDays = [1, 2, 3, 4, 5, 6, 7]; // monday to sunday
-    const firstDayOfWeek = 1; // standardizing on Monday
 
-    employees.forEach((emp, idx) => {
-      if (emp.status === 'ferias') return;
-      const checkNormalOff = (d: number) => {
-        const wd = (d - 1 + firstDayOfWeek) % 7;
-        if (emp.sex === 'F' && wd === 0) {
-          let sundaysCount = 0;
-          for (let i = 1; i <= d; i++) { if ((i - 1 + firstDayOfWeek) % 7 === 0) sundaysCount++; }
-          if (sundaysCount === 1 || sundaysCount === 3) return true;
-        }
-        const folgaDay = (idx % 6);
-        if (wd === folgaDay && wd !== 0) return true;
-        if (wd === 0 && idx % 2 === 0) return true;
-        if (wd === 6) {
-          let saturdaysCount = 0;
-          for (let i = 1; i <= d; i++) { if ((i - 1 + firstDayOfWeek) % 7 === 6) saturdaysCount++; }
-          if ((idx + saturdaysCount) % 2 === 0) return true;
-        }
-        return false;
-      };
+    // We'll calculate for the current week
+    const dateObj = new Date();
+    const dayOfWeek = dateObj.getDay();
+    const diffToSun = dayOfWeek;
 
-      typicalWeekDays.forEach((d, dayIndex) => {
-        if (!checkNormalOff(d)) {
-          if (emp.shift === 'T1') coverage.t1[dayIndex]++;
-          if (emp.shift === 'T2' || emp.shift === 'T3') coverage.t2t3[dayIndex]++;
-          if (emp.shift === 'T4') coverage.t4[dayIndex]++;
-        }
-      });
-    });
+    for (let i = 0; i < 7; i++) {
+      const d = todayDate - diffToSun + i;
+      if (d >= 1 && d <= numDays) {
+        const stats = getDayStats(d);
+        coverage.t1[i] = stats.t1;
+        coverage.t2t3[i] = stats.t2 + stats.t3;
+        coverage.t4[i] = stats.t4;
+      }
+    }
     return coverage;
   };
 
@@ -103,148 +222,158 @@ export default function Dashboard() {
         </div>
       </header>
       <div className="p-8 space-y-8">
-        {/* Top KPIs */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white dark:bg-background-dark p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-primary/10 text-primary rounded-lg">
-              <span className="material-symbols-outlined text-2xl">groups</span>
+        {/* TOP KPIs: Utilização da Força de Trabalho */}
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {/* Card Total (Geral) */}
+          <div className="bg-[#0f1423] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden group">
+            <div className={`absolute -top-4 -right-4 w-20 h-20 ${getDayStats(todayDate).t1 + getDayStats(todayDate).t2 + getDayStats(todayDate).t3 < 25 ? 'bg-red-600/10 animate-pulse' : 'bg-blue-600/5'} rounded-full blur-2xl`}></div>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Utilização Total</h4>
+              {getDayStats(todayDate).t1 + getDayStats(todayDate).t2 + getDayStats(todayDate).t3 < 25 && (
+                <span className="flex items-center gap-1 text-[8px] font-black text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded-full border border-red-500/20 animate-pulse">
+                  <span className="material-symbols-outlined text-[10px]">warning</span> DÉFICIT
+                </span>
+              )}
             </div>
-            <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-none">Total Colaboradores</p>
-              <h3 className="text-2xl font-bold mt-2">{employees.length}</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                T1:{employees.filter(e => e.shift === 'T1' && e.status === 'ativo').length} |
-                T2:{employees.filter(e => e.shift === 'T2' && e.status === 'ativo').length} |
-                T3:{employees.filter(e => e.shift === 'T3' && e.status === 'ativo').length} |
-                T4:{employees.filter(e => e.shift === 'T4' && e.status === 'ativo').length} |
-                Férias:{employees.filter(e => e.status === 'ferias').length}
-              </p>
-            </div>
-          </div>
-          <div className="bg-white dark:bg-background-dark p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg">
-              <span className="material-symbols-outlined text-2xl">warning</span>
-            </div>
-            <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-none">Alertas de Cobertura</p>
-              <h3 className="text-2xl font-bold mt-2 text-red-600 dark:text-red-400">2</h3>
-              <p className="text-xs text-slate-400 mt-1">Déficit: Sáb e Dom</p>
+            <div className="flex items-end justify-between">
+              <div>
+                <div className="text-3xl font-black text-white tracking-tighter">
+                  {getDayStats(todayDate).active} <span className="text-slate-700 text-lg">/ {employees.length}</span>
+                </div>
+                <div className="text-[10px] font-black text-blue-500 mt-1 uppercase tracking-tighter">Colaboradores Hoje</div>
+              </div>
+              <div className="bg-blue-500/10 text-blue-500 font-black text-[14px] px-2 py-1 rounded-lg border border-blue-500/20">
+                {Math.round((getDayStats(todayDate).active / (employees.length || 1)) * 100)}%
+              </div>
             </div>
           </div>
-          <div className="bg-white dark:bg-background-dark p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg">
-              <span className="material-symbols-outlined text-2xl">flight_takeoff</span>
-            </div>
-            <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-none">Em Férias</p>
-              <h3 className="text-2xl font-bold mt-2">3</h3>
-              <p className="text-xs text-slate-400 mt-1">Limite: 3/mês</p>
-            </div>
-          </div>
-        </section>
+
+          {/* Cards por Turno */}
+          {['T1', 'T2', 'T3', 'T4'].map((t) => {
+            const stats = getDayStats(todayDate);
+            const active = stats[t.toLowerCase() as keyof typeof stats] as number;
+            const totalInShift = employees.filter(e => e.shift === t).length;
+            const pct = totalInShift > 0 ? Math.round((active / totalInShift) * 100) : 0;
+
+            const shiftColors: Record<string, string> = {
+              T1: 'text-blue-400 border-blue-400/20 bg-blue-400/5',
+              T2: 'text-purple-400 border-purple-400/20 bg-purple-400/5',
+              T3: 'text-red-400 border-red-400/20 bg-red-400/5',
+              T4: 'text-amber-400 border-amber-400/20 bg-amber-400/5'
+            };
+
+            return (
+              <div key={t} className="bg-[#0f1423] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden group">
+                <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Utilização {t}</h4>
+                <div className="flex items-end justify-between">
+                  <div>
+                    <div className="text-2xl font-black text-white tracking-tighter">
+                      {active} <span className="text-slate-700 text-base">/ {totalInShift}</span>
+                    </div>
+                    <div className="text-[10px] font-black text-slate-500 mt-1 uppercase tracking-tighter">Escalados</div>
+                  </div>
+                  <div className={`font-black text-[12px] px-2 py-1 rounded-lg border ${shiftColors[t]}`}>
+                    {pct}%
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Chart: Bar Chart Horas por Turno */}
-          <div className="lg:col-span-2 bg-white dark:bg-background-dark p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold">Horas por Turno</h3>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-500">Colaboradores por Turno</span>
+          {/* Main Chart: Carga Horária por Turno */}
+          <div className="lg:col-span-2 bg-[#0f1423] p-10 rounded-2xl border border-white/5 shadow-2xl relative overflow-hidden group">
+            <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-600/5 rounded-full blur-3xl"></div>
+            <div className="flex items-center justify-between mb-12">
+              <div>
+                <h3 className="font-black text-white text-sm uppercase tracking-[0.2em] mb-1">Carga Horária por Turno</h3>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Distribuição de esforço para hoje, dia {todayDate}</p>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></span>
+                  <span className="text-[8px] font-black text-slate-400">HORAS TOTAIS</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-slate-700"></span>
+                  <span className="text-[8px] font-black text-slate-400">COLABORADORES</span>
+                </div>
               </div>
             </div>
-            <div className="h-48 flex items-stretch justify-between gap-4 px-2 mt-4 pb-4 border-b border-slate-100 dark:border-slate-800/50">
-              <div className="flex-1 flex flex-col items-center justify-end group">
-                <div
-                  className="w-full bg-primary rounded-t-lg relative flex flex-col justify-end transition-all"
-                  style={{ height: `${(employees.filter(e => e.shift === 'T1').length / (employees.length || 1)) * 100}%` }}
-                >
-                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-md font-bold text-center w-full whitespace-nowrap">
-                    {employees.filter(e => e.shift === 'T1').length} colab.
-                  </span>
-                </div>
-                <p className="text-[11px] mt-2 font-bold text-slate-500 uppercase tracking-tighter whitespace-nowrap">T1 (06-15h)</p>
-              </div>
-              <div className="flex-1 flex flex-col items-center justify-end group">
-                <div
-                  className="w-full bg-primary rounded-t-lg relative flex flex-col justify-end transition-all"
-                  style={{ height: `${(employees.filter(e => e.shift === 'T2').length / (employees.length || 1)) * 100}%` }}
-                >
-                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-md font-bold text-center w-full whitespace-nowrap">
-                    {employees.filter(e => e.shift === 'T2').length} colab.
-                  </span>
-                </div>
-                <p className="text-[11px] mt-2 font-bold text-slate-500 uppercase tracking-tighter whitespace-nowrap">T2 (13-22h)</p>
-              </div>
-              <div className="flex-1 flex flex-col items-center justify-end group">
-                <div
-                  className="w-full bg-primary rounded-t-lg relative flex flex-col justify-end transition-all"
-                  style={{ height: `${(employees.filter(e => e.shift === 'T3').length / (employees.length || 1)) * 100}%` }}
-                >
-                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-md font-bold text-center w-full whitespace-nowrap">
-                    {employees.filter(e => e.shift === 'T3').length} colab.
-                  </span>
-                </div>
-                <p className="text-[11px] mt-2 font-bold text-slate-500 uppercase tracking-tighter whitespace-nowrap">T3 (14-23h)</p>
-              </div>
-              <div className="flex-1 flex flex-col items-center justify-end group">
-                <div
-                  className="w-full bg-primary rounded-t-lg relative flex flex-col justify-end transition-all"
-                  style={{ height: `${(employees.filter(e => e.shift === 'T4').length / (employees.length || 1)) * 100}%` }}
-                >
-                  <span className="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-md font-bold text-center w-full whitespace-nowrap">
-                    {employees.filter(e => e.shift === 'T4').length} colab.
-                  </span>
-                </div>
-                <p className="text-[11px] mt-2 font-bold text-slate-500 uppercase tracking-tighter whitespace-nowrap">T4 (22-06h)</p>
-              </div>
+
+            <div className="grid grid-cols-4 gap-6 items-end h-56 relative pt-12">
+              {['T1', 'T2', 'T3', 'T4'].map(shift => {
+                const stats = getDayStats(todayDate);
+                const count = stats[shift.toLowerCase() as keyof typeof stats] as number;
+                const hours = Math.round(count * 8.8 * 10) / 10;
+                const shiftPct = stats.active > 0 ? Math.round((count / stats.active) * 100) : 0;
+                const maxPossibleHours = (employees.length / 2) * 8.8 || 1;
+                const heightPercent = Math.min(Math.max((hours / maxPossibleHours) * 180, 40), 180);
+
+                return (
+                  <div key={shift} className="relative flex flex-col items-center group/bar w-full">
+                    <div className="absolute -top-14 flex flex-col items-center z-20">
+                      <div className="text-[9px] font-black text-blue-400/80 mb-1 tracking-widest">{shiftPct}%</div>
+                      <div className="bg-blue-600 text-white font-black text-[12px] px-3 py-1 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.4)] border border-white/20">
+                        {hours}h
+                      </div>
+                      <div className="w-2 h-2 bg-blue-600 rotate-45 -mt-1 shadow-[0_0_10px_rgba(59,130,246,0.4)]"></div>
+                    </div>
+
+                    <div
+                      className="w-full bg-gradient-to-t from-blue-700 to-blue-500 rounded-2xl shadow-[0_0_20px_rgba(59,130,246,0.15)] relative overflow-hidden transition-all duration-500 hover:shadow-[0_0_30px_rgba(59,130,246,0.3)] hover:scale-105 cursor-grab"
+                      style={{ height: `${heightPercent}px` }}
+                    >
+                      <div className="absolute inset-0 bg-white/10 opacity-30"></div>
+                      <div className="absolute bottom-3 left-0 right-0 text-center">
+                        <div className="text-white font-black text-[18px] leading-none mb-1">{count}</div>
+                        <div className="text-white/50 font-black text-[7px] uppercase tracking-tighter">PESSOAS</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 text-center">
+                      <div className="text-white font-black text-[11px] tracking-widest">{shift}</div>
+                      <div className="text-slate-600 font-bold text-[8px] uppercase tracking-tighter whitespace-nowrap">
+                        {SHIFT_HOURS[shift].start}:00 - {SHIFT_HOURS[shift].end < 24 ? SHIFT_HOURS[shift].end.toFixed(0) : (SHIFT_HOURS[shift].end - 24).toFixed(0)}:00
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-          {/* Ranking: Top Colaboradores */}
-          <div className="bg-white dark:bg-background-dark p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
-            <h3 className="text-lg font-bold mb-4">Mais Ativos (Top 10)</h3>
-            <div className="space-y-4 flex-1 overflow-y-auto max-h-[256px] pr-2 custom-scrollbar">
-              <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-slate-400 w-4">1</span>
-                  <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <Image className="w-full h-full object-cover" alt="User avatar male" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCrBsVo7oV1Eo1kTQhThCSLlnjZFzML7Am5RhzqxKcFR9puN3bRl7BW8B-0d2h9kRh4zto2aMa_X7WQzJu7oCd1d7VQOy-YGZ3lqStbJJOG76i7v-ZA44LAZrov21Ms8HQVEQXaPcwZF9fmmil1c_nFlAd24NfaEw7OTG6ZMf0OgImCRIk1N1cunGlEwFeRiDEtYtx5SHDO3f5RagOp9u2ZkIhj7sZIqqOMhKMFvnj9ZAvy2q-0_vkuCuVNRFGgVXW2yMpJCpxkkiU" width={32} height={32} />
+
+          {/* Ranking: Top Colaboradores (Real Data) */}
+          <div className="bg-[#0f1423] p-6 rounded-2xl border border-white/5 shadow-2xl flex flex-col relative overflow-hidden group">
+            <div className="absolute -top-4 -right-4 w-24 h-24 bg-blue-600/5 rounded-full blur-3xl group-hover:bg-blue-600/10 transition-all"></div>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-black text-white uppercase tracking-widest text-[11px]">Mais Ativos (Top 5)</h3>
+              <span className="text-[10px] font-black text-slate-500 uppercase">Horas Mês</span>
+            </div>
+            <div className="space-y-3 flex-1 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
+              {employees
+                .map(emp => ({ ...emp, totalHours: getMonthlyHours(emp) }))
+                .sort((a, b) => b.totalHours - a.totalHours)
+                .slice(0, 5)
+                .map((emp, idx) => (
+                  <div key={emp.id} className="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.02] transition-all group/item border border-transparent hover:border-white/5">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-black text-slate-600 w-4">{idx + 1}</span>
+                      <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center font-black text-slate-400 text-[10px] group-hover/item:border-blue-500/50 transition-colors">
+                        {emp.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                      </div>
+                      <span className="text-sm font-bold text-slate-300">{emp.name}</span>
+                    </div>
+                    <span className="text-[10px] font-black px-2 py-1 bg-blue-600/10 text-blue-500 rounded-lg border border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.1)]">
+                      {emp.totalHours}h
+                    </span>
                   </div>
-                  <span className="text-sm font-medium">Carlos da Silva</span>
-                </div>
-                <span className="text-xs font-bold px-2 py-1 bg-primary/10 text-primary rounded-full">176h</span>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-slate-400 w-4">2</span>
-                  <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <Image className="w-full h-full object-cover" alt="User avatar female" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBKZo7h9ubyRgziA03nT-wxkhuHSrm6PdhcPe0rf65abtKIn6CETfEQRmYIQ8wXvXXW3s_2jYzVQv2lpV2yK5VAFLcVx6gQfDuPM1De-ifXl-e23FtEL6mjwj2TNZ2kEkKo3LxuI1kCv_ZKslZJFillpRjOcEUk7VmdjLRP_cd-nj9E36MhIfDXUVYVMt3hgDnM8x2PN7uoNv9Wg0OOHaddXGZWNdDO9-nVJV0YQfVJ933M7c6CjP7bjgwwCMylMy5yKDkqmu2PJwI" width={32} height={32} />
-                  </div>
-                  <span className="text-sm font-medium">Ana B. Rocha</span>
-                </div>
-                <span className="text-xs font-bold px-2 py-1 bg-primary/10 text-primary rounded-full">168h</span>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-slate-400 w-4">3</span>
-                  <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <Image className="w-full h-full object-cover" alt="User avatar male" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBx_u1Apyq-jm0tMvyvchDIb4_GtpUGaFfoHcZsGhL4xsv-pQUforLtFPIuXmzJH68YeYY95UAdJyR3uo8TWNcRkO2GEwRMa9bbF-TL7H1ivWl1dQ2GbrpCEzL6dUiXxUk9qlfZ4pLHrLS2KHnZ3WRsFbPmRLeBMP2OiPdZGcVd4APUFnhDmsYrnRSZVM0wktu9rrWekPyjTBn1mJ98DAdug8dlYIu4jgvIux938vrylusK8t9MQ43RS7KhWt9bUflYNKqM_fMcy2Y" width={32} height={32} />
-                  </div>
-                  <span className="text-sm font-medium">Roberto Almeida</span>
-                </div>
-                <span className="text-xs font-bold px-2 py-1 bg-primary/10 text-primary rounded-full">160h</span>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-slate-400 w-4">4</span>
-                  <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <Image className="w-full h-full object-cover" alt="User avatar female" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCIbZxat8bf41ZL1Hsk_p5nO792jlXFGJfzxNPdKLMiNMIy3akc3YSlmdLVisiGKjaV8E0vFMSa_ajZyXVIbPt0rigqGJDdEvBc-bUqM3HuhQCpCtFBpfuaLBGlHi-0LG83w23ZKFYccL253P_LOVh7Y9g81Z_NHuqZTmiRsLBq9s6tVSWk6lpMh8_4NSZXdC5K6ZnClubcqpcKUpLIvRw8kuCtR9UB_KVZwGq0ig2cBg5QWmD9LH0zFZ46zV35X9CCEzVJSk0W3j4" width={32} height={32} />
-                  </div>
-                  <span className="text-sm font-medium">Juliana Mendes</span>
-                </div>
-                <span className="text-xs font-bold px-2 py-1 bg-primary/10 text-primary rounded-full">158h</span>
-              </div>
+                ))}
             </div>
           </div>
         </div>
+
         {/* Heatmap: Cobertura Semanal */}
         <section className="bg-white dark:bg-background-dark p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -321,6 +450,7 @@ export default function Dashboard() {
           </div>
         </section>
       </div>
+
       <footer className="mt-auto p-8 border-t border-slate-200 dark:border-slate-800 text-center text-slate-400 text-xs">
         © 2024 Sistame Escala. Todos os direitos reservados.
       </footer>
